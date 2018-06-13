@@ -25,6 +25,9 @@
 /******************
 *    CHANGELOG    *
 *******************
+* 2018-03-02. Giulio.     @ADDED the possibility to set a path and a name for the mdata.bin file generated when volumes are created from data
+* 2018-02-03. Giulio.     @ADDED internal method to correct non symmetric displacements between tiles
+* 2018-01-20. Giulio.     @CHANGED some methods to virtual and the type of a few data members
 * 2017-04-27. Giulio.     @ADDED static method to get the input plugin from the xml if specified
 * 2017-04-12. Giulio.     @ADDED method to release all buffers allocated in VirtualStack
 * 2016-09-01. Giulio.     @ADDED Cache buffer.
@@ -63,7 +66,7 @@ class volumemanager::VirtualVolume
 		float  VXL_V, VXL_H, VXL_D;			//[microns]: voxel dimensions (in microns) along V(Vertical), H(horizontal) and D(Depth) axes
 		float  ORG_V, ORG_H, ORG_D;			//[millimeters]: origin spatial coordinates (in millimeters) along VHD axes
 		float  MEC_V, MEC_H;				//[microns]: mechanical displacements of the microscope between two adjacent stacks
-		iom::uint16 N_ROWS, N_COLS;			//dimensions (in stacks) of stacks matrix along VH axes
+		int N_ROWS, N_COLS;			//dimensions (in stacks) of stacks matrix along VH axes
 		int N_SLICES;						//dimension along D(Z).
 		vm::ref_sys reference_system;
 		int    DIM_C;					// number of channels        (@ADDED by Iannello   on ..........)
@@ -91,6 +94,9 @@ class volumemanager::VirtualVolume
 
 		//extract spatial coordinates (in millimeters) of given Stack object reading directory and filenames as spatial coordinates
 		void extractCoordinates(VirtualStack* stk, int z, int* crd_1, int* crd_2, int* crd_3=0);
+		
+		// 2018-02-03. Giulio. internal method to correct non symmetric displacements between tiles
+		void adjustDisplacements ();
 
     public:
 
@@ -136,21 +142,21 @@ class volumemanager::VirtualVolume
 		float	 getVXL_D();
 		float	 getMEC_V();
 		float	 getMEC_H();
-		virtual int		 getStacksHeight() = 0;
-		virtual int		 getStacksWidth() = 0;
-		int		 getN_ROWS();
-		int		 getN_COLS();
-		int		 getN_SLICES();
+		virtual int getStacksHeight() = 0;
+		virtual int	getStacksWidth() = 0;
+		virtual int getN_ROWS();
+		virtual int	getN_COLS();
+		virtual int	getN_SLICES();
 		int		 getDIM_C();
 		int		 getBYTESxCHAN();
 		virtual VirtualStack*** getSTACKS() = 0;
 		char*    getSTACKS_DIR(){return this->stacks_dir;}
-		int		 getOVERLAP_V();
-		int		 getOVERLAP_H();
-		int		 getDEFAULT_DISPLACEMENT_V();
-		int		 getDEFAULT_DISPLACEMENT_H();
-		virtual int		 getDEFAULT_DISPLACEMENT_D();
-		vm::ref_sys getREF_SYS(){return reference_system;}
+		virtual int	getOVERLAP_V();
+		virtual int getOVERLAP_H();
+		virtual int	getDEFAULT_DISPLACEMENT_V();
+		virtual int	getDEFAULT_DISPLACEMENT_H();
+		virtual int	getDEFAULT_DISPLACEMENT_D();
+		virtual vm::ref_sys getREF_SYS(){return reference_system;}
 
 		int      getACTIVE_CHAN() { return active_channel; }
 		void     setACTIVE_CHAN(int c) { active_channel = c; }
@@ -204,7 +210,7 @@ class volumemanager::VirtualVolume
 
 // define new type: VirtualVolume plugin creator functions
 typedef volumemanager::VirtualVolume* (*VolumeCreatorXML)(const char*, bool);
-typedef volumemanager::VirtualVolume* (*VolumeCreatorData)(const char*, vm::ref_sys, float, float, float, bool);
+typedef volumemanager::VirtualVolume* (*VolumeCreatorData)(const char*, vm::ref_sys, float, float, float, bool, std::string);
 
 // Factory for plugins' registration and instantiation
 class volumemanager::VirtualVolumeFactory 
@@ -251,11 +257,11 @@ class volumemanager::VirtualVolumeFactory
             return (instance()->creators_xml[id])(xml_path, ow_mdata);
         }
 
-		static VirtualVolume* createFromData(std::string id, const char* data_path, vm::ref_sys ref, float vxl1, float vxl2, float vxl3, bool ow_mdata) throw (iom::exception)
+		static VirtualVolume* createFromData(std::string id, const char* data_path, vm::ref_sys ref, float vxl1, float vxl2, float vxl3, bool ow_mdata, std::string mdata_fname="") throw (iom::exception)
 		{ 
 			if(instance()->creators_data.find(id) == instance()->creators_data.end())
 				throw iom::exception(iom::strprintf("Cannot find VirtualVolume(data) plugin \"%s\": no such plugin", id.c_str()).c_str());
-			return (instance()->creators_data[id])(data_path, ref, vxl1, vxl2, vxl3, ow_mdata); 
+			return (instance()->creators_data[id])(data_path, ref, vxl1, vxl2, vxl3, ow_mdata, mdata_fname); 
 		}
 
 		// get list of registered plugins

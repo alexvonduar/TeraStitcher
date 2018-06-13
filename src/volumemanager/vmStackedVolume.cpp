@@ -28,6 +28,8 @@
 /******************
 *    CHANGELOG    *
 *******************
+* 2018-03-02. Giulio.     @ADDED the possibility to set a path and a name for the mdata.bin file
+* 2018-02-03. Giulio.     @ADDED call to 'adjustDisplacements' in method reading the xml file to force all displacements of adjacent tile symmetric
 * 2017-04-27. Giulio.     @ADDED code to get and initialize the input plugin from the xml if specified
 * 2017-04-12. Giulio.     @ADDED method to release all buffers allocated in VirtualStack
 * 2016-11-14. Giulio.     @ADDED management of the case when z_end is invalid (i.e. when import is from an xml import file generated externally
@@ -90,7 +92,7 @@ const std::string StackedVolume::id = "TiledXY|2Dseries";
 const std::string StackedVolume::creator_id1 = volumemanager::VirtualVolumeFactory::registerPluginCreatorXML(&createFromXML, StackedVolume::id);
 const std::string StackedVolume::creator_id2 = volumemanager::VirtualVolumeFactory::registerPluginCreatorData(&createFromData, StackedVolume::id);
 
-StackedVolume::StackedVolume(const char* _stacks_dir, vm::ref_sys _reference_system, float VXL_1, float VXL_2, float VXL_3, bool overwrite_mdata) throw (iom::exception)
+StackedVolume::StackedVolume(const char* _stacks_dir, vm::ref_sys _reference_system, float VXL_1, float VXL_2, float VXL_3, bool overwrite_mdata, std::string mdata_fname) throw (iom::exception)
 	: VirtualVolume(_stacks_dir, _reference_system, VXL_1, VXL_2, VXL_3)
 {
 	#if VM_VERBOSE > 3
@@ -99,8 +101,13 @@ StackedVolume::StackedVolume(const char* _stacks_dir, vm::ref_sys _reference_sys
 	#endif
 
 	//trying to unserialize an already existing metadata file, if it doesn't exist the full initialization procedure is performed and metadata is saved
-    char mdata_filepath[VM_STATIC_STRINGS_SIZE];
-    sprintf(mdata_filepath, "%s/%s", stacks_dir, vm::BINARY_METADATA_FILENAME.c_str());
+	char mdata_filepath[VM_STATIC_STRINGS_SIZE];
+	if ( mdata_fname == "" ) { // no metadata file name present in xml file, use default folder and name
+		sprintf(mdata_filepath, "%s/%s", stacks_dir, vm::BINARY_METADATA_FILENAME.c_str());
+	}
+	else {
+		strcpy(mdata_filepath,mdata_fname.c_str());
+	}
     if(fileExists(mdata_filepath) && !overwrite_mdata)
         loadBinaryMetadata(mdata_filepath);
     else
@@ -154,13 +161,21 @@ StackedVolume::StackedVolume(const char *xml_filepath, bool overwrite_mdata) thr
     TiXmlElement * pelem = hRoot.FirstChildElement("stacks_dir").Element();
     this->stacks_dir = new char[strlen(pelem->Attribute("value"))+1];
     strcpy(this->stacks_dir, pelem->Attribute("value"));
+
+ 	//trying to unserialize an already existing metadata file, if it doesn't exist the full initialization procedure is performed and metadata is saved
+	char mdata_filepath[VM_STATIC_STRINGS_SIZE];
+	pelem = hRoot.FirstChildElement("mdata_bin").Element();
+
+	if ( pelem == ((TiXmlElement *)0) ) { // no metadata file name present in xml file, use default folder and name
+		sprintf(mdata_filepath, "%s/%s", stacks_dir, vm::BINARY_METADATA_FILENAME.c_str());
+	}
+	else {
+		strcpy(mdata_filepath, pelem->Attribute("value"));
+	}
+
 	xml.Clear();
 
-	//trying to unserialize an already existing metadata file, if it doesn't exist the full initialization procedure is performed and metadata is saved
-	char mdata_filepath[2000];
-	sprintf(mdata_filepath, "%s/%s", stacks_dir, vm::BINARY_METADATA_FILENAME.c_str());
-
-    // 2014-09-20. Alessandro. @ADDED overwrite_mdata flag
+	// 2014-09-20. Alessandro. @ADDED overwrite_mdata flag
     if(fileExists(mdata_filepath) && !overwrite_mdata)
 	{
 		// load mdata.bin content and xml content, also perform consistency check between mdata.bin and xml content
@@ -594,6 +609,8 @@ void StackedVolume::loadXML(const char *xml_filepath) throw (iom::exception)
 	for(i=0; i<N_ROWS; i++)
 		for(j=0; j<N_COLS; j++, pelem = pelem->NextSiblingElement())
 			STACKS[i][j]->loadXML(pelem, N_SLICES);
+
+	adjustDisplacements();  // 2018-02-03. Giulio. @ADDED correction of displacements to force them to be symmetric
 }
 
 void StackedVolume::initFromXML(const char *xml_filepath) throw (iom::exception)
@@ -680,6 +697,7 @@ void StackedVolume::initFromXML(const char *xml_filepath) throw (iom::exception)
 
 	// check stacks have the same width and height
 	normalize_stacks_attributes();
+	adjustDisplacements();  // 2018-02-03. Giulio. @ADDED correction of displacements to force them to be symmetric
 }
 
 void StackedVolume::saveXML(const char *xml_filename, const char *xml_filepath) throw (iom::exception)

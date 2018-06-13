@@ -1,5 +1,7 @@
 # CMakeLists.txt in UI dir
 
+option (WITH_NEW_MERGE "Use new merge code" OFF) 
+
 # add used modules to include path
 include_directories (${TeraStitcher_SOURCE_DIR}/iomanager)
 include_directories (${TeraStitcher_SOURCE_DIR}/volumemanager)
@@ -7,6 +9,9 @@ include_directories (${TeraStitcher_SOURCE_DIR}/crossmips)
 include_directories (${TeraStitcher_SOURCE_DIR}/stitcher)
 include_directories (${TeraStitcher_SOURCE_DIR}/common)
 include_directories (${TeraStitcher_SOURCE_DIR}/imagemanager)
+if(WITH_NEW_MERGE)
+		include_directories (${TeraStitcher_SOURCE_DIR}/utils/volumeconverter)
+endif(WITH_NEW_MERGE)
 
 # add 3rd party modules to include path
 include_directories(${TeraStitcher_SOURCE_DIR}/3rdparty)
@@ -16,6 +21,11 @@ include_directories(${TeraStitcher_SOURCE_DIR}/3rdparty/tinyxml)
 # add executable from the all .h and .cpp files
 file(GLOB UI_headers *.h)
 file(GLOB UI_sources *.cpp)
+
+if(WITH_NEW_MERGE)
+	add_definitions(-DNEW_MERGE_ACTIVE)
+endif(WITH_NEW_MERGE)
+
 add_executable(terastitcher ${UI_headers} ${UI_sources})
 
 # add executable to install target
@@ -25,6 +35,9 @@ install(TARGETS terastitcher
 
 # link the executable to the other modules 
 target_link_libraries(terastitcher stitcher )
+if(WITH_NEW_MERGE)
+	target_link_libraries(terastitcher volumeconverter )
+endif(WITH_NEW_MERGE)
 target_link_libraries(terastitcher volumemanager )
 target_link_libraries(terastitcher crossmips )
 target_link_libraries(terastitcher iomanager )
